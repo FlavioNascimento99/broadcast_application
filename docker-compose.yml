@@ -1,0 +1,89 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: pd-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-publisher_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/database/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pd-network
+
+  # Middleware Pub/Sub Broker (Go)
+  middleware:
+    build:
+      context: ./middleware
+      dockerfile: Dockerfile
+    container_name: pd-middleware
+    ports:
+      - "9000:9000"  # Client connections
+      - "9100:9100"  # Peer-to-peer mesh
+    environment:
+      - CLIENT_ADDR=:9000
+      - PEER_ADDR=:9100
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pd-network
+    depends_on:
+      - postgres
+
+  # Backend API (Node.js)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: pd-backend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres:5432/${DB_NAME:-publisher_db}
+      MIDDLEWARE_ADDR: middleware:9000
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      middleware:
+        condition: service_healthy
+    networks:
+      - pd-network
+    restart: unless-stopped
+
+  # Frontend (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pd-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - pd-network
+    restart: unless-stopped
+
+networks:
+  pd-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
