@@ -72,11 +72,32 @@ router.delete(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { id } = req.params;
+      
+      // Get topic data before deleting (for the event)
+      const topic = await TopicRepository.findById(id);
+      
       const deleted = await TopicRepository.delete(id);
 
       if (!deleted) {
         res.status(404).json({ error: "Topic not found" });
         return;
+      }
+
+      // Publish event to middleware
+      if (topic) {
+        try {
+          const eventService = getEventService();
+          if (eventService.isInitialized()) {
+            await eventService.publishTopicDeleted({
+              id: topic.id,
+              name: topic.name,
+              description: topic.description,
+            });
+          }
+        } catch (err) {
+          console.error("[topics route] Error publishing deletion event:", err);
+          // Continue anyway - event publishing is not critical
+        }
       }
 
       res.json({ success: true, message: "Topic deleted" });

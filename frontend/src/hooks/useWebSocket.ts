@@ -57,25 +57,53 @@ export function useWebSocket() {
     }
   }, [])
 
-  const subscribeToPostEvents = useCallback((onPostCreated: (post: PostEvent) => void) => {
+  const subscribeToPostEvents = useCallback((onPostChange: (post: PostEvent) => void) => {
     const ws = getWebSocketService()
     subscriptionsRef.current.posts = true
     ws.subscribeToPosts()
-    ws.on('post:created', onPostCreated)
+    
+    // Listen to both creation and deletion events
+    const handlePostCreated = (post: PostEvent) => {
+      console.log('[useWebSocket] Post event (created):', post)
+      onPostChange(post)
+    }
+    
+    const handlePostDeleted = (post: PostEvent) => {
+      console.log('[useWebSocket] Post event (deleted):', post)
+      onPostChange(post)
+    }
+    
+    ws.on('post:created', handlePostCreated)
+    ws.on('post:deleted', handlePostDeleted)
 
     return () => {
-      ws.removeListener('post:created', onPostCreated)
+      ws.removeListener('post:created', handlePostCreated)
+      ws.removeListener('post:deleted', handlePostDeleted)
     }
   }, [])
 
-  const subscribeToTopicEvents = useCallback((onTopicCreated: (topic: TopicEvent) => void) => {
+  const subscribeToTopicEvents = useCallback((onTopicChange: (topic: TopicEvent) => void) => {
     const ws = getWebSocketService()
     subscriptionsRef.current.topics = true
     ws.subscribeToTopics()
-    ws.on('topic:created', onTopicCreated)
+    
+    // Listen to both creation and deletion events
+    const handleTopicCreated = (topic: TopicEvent) => {
+      console.log('[useWebSocket] Topic event (created):', topic)
+      onTopicChange(topic)
+    }
+    
+    const handleTopicDeleted = (topic: TopicEvent) => {
+      console.log('[useWebSocket] Topic event (deleted):', topic)
+      onTopicChange(topic)
+    }
+    
+    ws.on('topic:created', handleTopicCreated)
+    ws.on('topic:deleted', handleTopicDeleted)
 
     return () => {
-      ws.removeListener('topic:created', onTopicCreated)
+      ws.removeListener('topic:created', handleTopicCreated)
+      ws.removeListener('topic:deleted', handleTopicDeleted)
     }
   }, [])
 

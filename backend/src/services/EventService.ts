@@ -88,6 +88,32 @@ class EventService extends EventEmitter {
     }
   }
 
+  async publishPostDeleted(postData: any): Promise<void> {
+    try {
+      const result = await this.client.publish('post_deleted', {
+        type: 'post_deleted',
+        data: postData,
+        timestamp: new Date().toISOString(),
+      })
+      console.log('[EventService] Post deleted event published:', result)
+    } catch (err) {
+      console.error('[EventService] Failed to publish post deleted event:', err)
+    }
+  }
+
+  async publishTopicDeleted(topicData: any): Promise<void> {
+    try {
+      const result = await this.client.publish('topic_deleted', {
+        type: 'topic_deleted',
+        data: topicData,
+        timestamp: new Date().toISOString(),
+      })
+      console.log('[EventService] Topic deleted event published:', result)
+    } catch (err) {
+      console.error('[EventService] Failed to publish topic deleted event:', err)
+    }
+  }
+
   async subscribeToPostCreated(): Promise<void> {
     try {
       await this.client.subscribe('post_created')
@@ -103,6 +129,24 @@ class EventService extends EventEmitter {
       console.log('[EventService] Subscribed to topic_created')
     } catch (err) {
       console.error('[EventService] Failed to subscribe to topic_created:', err)
+    }
+  }
+
+  async subscribeToPostDeleted(): Promise<void> {
+    try {
+      await this.client.subscribe('post_deleted')
+      console.log('[EventService] Subscribed to post_deleted')
+    } catch (err) {
+      console.error('[EventService] Failed to subscribe to post_deleted:', err)
+    }
+  }
+
+  async subscribeToTopicDeleted(): Promise<void> {
+    try {
+      await this.client.subscribe('topic_deleted')
+      console.log('[EventService] Subscribed to topic_deleted')
+    } catch (err) {
+      console.error('[EventService] Failed to subscribe to topic_deleted:', err)
     }
   }
 

@@ -44,6 +44,7 @@ io.on('connection', (socket) => {
     socket.join('posts');
     try {
       await eventService.subscribeToPostCreated();
+      await eventService.subscribeToPostDeleted();
     } catch (err) {
       console.error('[Socket.IO] Error subscribing to posts:', err);
     }
@@ -54,6 +55,7 @@ io.on('connection', (socket) => {
     socket.join('topics');
     try {
       await eventService.subscribeToTopicCreated();
+      await eventService.subscribeToTopicDeleted();
     } catch (err) {
       console.error('[Socket.IO] Error subscribing to topics:', err);
     }
@@ -71,6 +73,10 @@ eventService.on('event', (event) => {
     io.to('posts').emit('post:created', event.data);
   } else if (event.topic === 'topic_created') {
     io.to('topics').emit('topic:created', event.data);
+  } else if (event.topic === 'post_deleted') {
+    io.to('posts').emit('post:deleted', event.data);
+  } else if (event.topic === 'topic_deleted') {
+    io.to('topics').emit('topic:deleted', event.data);
   }
 });
 

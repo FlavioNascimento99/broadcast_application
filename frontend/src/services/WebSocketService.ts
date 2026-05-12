@@ -122,6 +122,16 @@ export class WebSocketService extends SimpleEventEmitter {
           this.emit('topic:created', data)
         })
 
+        this.socket.on('post:deleted', (data: PostEvent) => {
+          console.log('[WebSocket] Post deleted:', data)
+          this.emit('post:deleted', data)
+        })
+
+        this.socket.on('topic:deleted', (data: TopicEvent) => {
+          console.log('[WebSocket] Topic deleted:', data)
+          this.emit('topic:deleted', data)
+        })
+
         this.socket.on('system:middleware-connected', () => {
           console.log('[WebSocket] Middleware connected')
           this.emit('middleware:connected')
