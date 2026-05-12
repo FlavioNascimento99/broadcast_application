@@ -215,14 +215,116 @@
 │ socket.on('subscribe:posts') {                           │
 │   socket.join('posts')  // room de broadcasts            │
 │   eventService.subscribeToPostCreated()                  │
+│   eventService.subscribeToPostDeleted()  // ← Novo v2    │
 │   └─► MiddlewareClient.subscribe('post_created')         │
-│       └─► Envia: {type: "subscribe", topic: "post_created"}  │
+│   └─► MiddlewareClient.subscribe('post_deleted')  ← Novo │
+│       └─► Envia: {type: "subscribe", topic: "post_*"}    │
 │       └─► Aguarda ACK                                    │
-│           └─► Broker registra subscriber                 │
+│           └─► Broker registra subscribers                │
 │           └─► Agora envia eventos para este cliente      │
 │ }                                                         │
 └──────────────────────────────────────────────────────────┘
 ```
+
+---
+
+### 4️⃣ Fluxo: Deletar um Post (NEW v2)
+
+#### Sequência Completa (Happy Path)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ FRONTEND: Usuário clica "Delete Post"                           │
+└─────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ DELETE /api/posts/:id (HTTP)                                    │
+└─────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ BACKEND: routes/posts.ts → router.delete('/:id')                 │
+│                                                                   │
+│ 1. Valida parâmetro id                                           │
+│                                                                   │
+│ 2. const post = await PostRepository.findById(id)                │
+│    └─► Recupera dados ANTES de deletar (para event)              │
+│                                                                   │
+│ 3. const deleted = await PostRepository.delete(id)               │
+│    └─► Prisma delete from posts where id=...                    │
+│                                                                   │
+│ 4. if (post) {                                                   │
+│      EventService.publishPostDeleted({id, author, content, ...})│
+│      └─► MiddlewareClient.publish('post_deleted', payload)       │
+│          └─► Serializa para JSON                                 │
+│          └─► Envia via TCP ao broker: ":9000"                    │
+│              JSON: {                                             │
+│                "type": "publish",                                │
+│                "topic": "post_deleted",  ← Novo event type      │
+│                "payload": {id, author, content, ...},            │
+│                "req_id": "req_1234567890"                        │
+│              }                                                   │
+│                                                                   │
+│ 5. Aguarda ACK do broker (timeout: 30s)                          │
+│    └─► Broker retorna: {type: "ack", status: "delivered"}       │
+│                                                                   │
+│ 6. res.json({ success: true, message: "Post deleted" })          │
+└──────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ MIDDLEWARE BROKER (Go): :9000                                    │
+│                                                                   │
+│ 1. Recebe mensagem de publish do backend                         │
+│    {type: "publish", topic: "post_deleted", payload: {...}}     │
+│                                                                   │
+│ 2. Lookup topic "post_deleted" em topics map                     │
+│    └─► if !exists: criar novo topic                             │
+│                                                                   │
+│ 3. Busca subscribers para "post_deleted"                         │
+│    ├─► Encontra frontend subscribers                            │
+│    │   └─► Envia a cada um: {type: "event", payload: {...}}    │
+│    │                                                              │
+│    └─► Retorna ACK: {type: "ack", status: "delivered"}          │
+└──────────────────────────────────────────────────────────────────┘
+              │
+              ├─────────────────────────────┐
+              │                             │
+              ▼                             ▼
+┌─────────────────────────────────┐  ┌──────────────────────────────┐
+│ FRONTEND WebSocket Listener      │  │ BACKEND Listener             │
+│                                  │  │ (Backend já subscrito)       │
+│ socket.on('post:deleted')        │  │                              │
+│                                  │  │ EventService.on('event')     │
+│ 1. Recebe evento do broker       │  │ 1. Filtra topic=="post_del"  │
+│    {data: post}                  │  │ 2. io.to('posts').emit(...)  │
+│                                  │  │    └─► Retransmite para      │
+│ 2. Callback: onPostChange()      │  │        subscribers           │
+│    setPostsRefresh((p)=>p+1)     │  │                              │
+│                                  │  │ Logs: "[Index] Broadcasting" │
+│ 3. PostList.useEffect            │  │       event.topic            │
+│    └─► Trigger refetch de posts │  │                              │
+│        GET /api/posts           │  │                              │
+│                                  │  │                              │
+│ 4. UI atualiza: remove post      │  │                              │
+└─────────────────────────────────┘  └──────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────┐
+│ FRONTEND: PostList re-renderiza  │
+│                                  │
+│ • Post removido da lista          │
+│ • Animação de remoção opcional    │
+│ • Notificação de sucesso         │
+└─────────────────────────────────┘
+```
+
+**Diferenças vs Criação:**
+- Primeiro: Retrieve dados do recurso deletado
+- Depois: Deletar do banco
+- Último: Publicar evento com dados do deletado
+- Frontend dispara refresh (mesma funcionalidade que criação)
 
 ---
 

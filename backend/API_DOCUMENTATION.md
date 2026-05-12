@@ -9,6 +9,7 @@ Documentação completa da API Publisher Node.js para gerenciamento de tópicos 
 - [Health & Status](#health--status)
 - [Topics (Tópicos)](#topics-tópicos)
 - [Posts (Publicações)](#posts-publicações)
+- [Real-time Updates](#real-time-updates)
 - [Tratamento de Erros](#tratamento-de-erros)
 
 ---
@@ -224,6 +225,10 @@ DELETE /api/topics/:id
 }
 ```
 
+**Real-time Event**
+
+Quando um tópico é deletado, um evento `topic:deleted` é publicado via WebSocket para todos os clientes conectados (ver [Real-time Updates](#real-time-updates)).
+
 **Error Responses**
 
 - `404 Not Found` — Tópico não encontrado
@@ -409,9 +414,106 @@ DELETE /api/posts/:id
 }
 ```
 
+**Real-time Event**
+
+Quando uma publicação é deletada, um evento `post:deleted` é publicado via WebSocket para todos os clientes conectados (ver [Real-time Updates](#real-time-updates)).
+
 **Error Responses**
 
 - `404 Not Found` — Publicação não encontrada
+
+---
+
+## Real-time Updates
+
+A API suporta atualizações em tempo real via WebSocket. Quando qualquer cliente cria ou deleta um recurso, todos os outros clientes conectados recebem notificações instantaneamente.
+
+### Eventos Disponíveis
+
+#### `post:created`
+Dispara quando um novo post é criado.
+
+```javascript
+interface PostEvent {
+  id: string
+  author: string
+  content: string
+  topic_id: string
+  created_at: string
+}
+
+socket.on('post:created', (post: PostEvent) => {
+  console.log(`${post.author} criou um novo post`);
+})
+```
+
+#### `post:deleted`
+Dispara quando um post é deletado.
+
+```javascript
+socket.on('post:deleted', (post: PostEvent) => {
+  console.log(`Post de ${post.author} foi removido`);
+})
+```
+
+#### `topic:created`
+Dispara quando um novo tópico é criado.
+
+```javascript
+interface TopicEvent {
+  id: string
+  name: string
+  description?: string
+  created_at: string
+}
+
+socket.on('topic:created', (topic: TopicEvent) => {
+  console.log(`Novo tópico: ${topic.name}`);
+})
+```
+
+#### `topic:deleted`
+Dispara quando um tópico é deletado.
+
+```javascript
+socket.on('topic:deleted', (topic: TopicEvent) => {
+  console.log(`Tópico ${topic.name} foi removido`);
+})
+```
+
+### Como Usar
+
+```javascript
+import { io } from 'socket.io-client'
+
+const socket = io('http://localhost:3000')
+
+socket.on('connect', () => {
+  console.log('Connected to backend')
+  
+  // Subscribe to posts updates
+  socket.emit('subscribe:posts')
+  
+  // Subscribe to topics updates
+  socket.emit('subscribe:topics')
+})
+
+socket.on('post:created', (post) => {
+  console.log('Novo post:', post)
+})
+
+socket.on('post:deleted', (post) => {
+  console.log('Post deletado:', post.id)
+})
+
+socket.on('topic:created', (topic) => {
+  console.log('Novo tópico:', topic)
+})
+
+socket.on('topic:deleted', (topic) => {
+  console.log('Tópico deletado:', topic.id)
+})
+```
 
 ---
 

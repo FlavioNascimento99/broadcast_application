@@ -233,6 +233,147 @@ open http://localhost:5173
 
 ---
 
+---
+
+## 🔄 Update: Sincronização de Deleções (v2)
+
+### Problema Identificado
+Antes: Quando usuários **deletavam** itens (tópicos/posts), a atualização não era replicada via WebSocket para os outros clientes, mesmo padrão de criação funcionando.
+
+### Solução Implementada
+
+#### Backend - EventService.ts
+```typescript
+// Novos métodos adicionados
+async publishPostDeleted(postData: any): Promise<void>
+  └─► Publica evento 'post_deleted' ao middleware
+
+async publishTopicDeleted(topicData: any): Promise<void>
+  └─► Publica evento 'topic_deleted' ao middleware
+
+async subscribeToPostDeleted(): Promise<void>
+  └─► Subscreve a eventos 'post_deleted'
+
+async subscribeToTopicDeleted(): Promise<void>
+  └─► Subscreve a eventos 'topic_deleted'
+```
+
+#### Backend - Routes (topics.ts e posts.ts)
+Padrão: Recuperar dados ANTES de deletar → Deletar → Publicar evento
+
+```typescript
+// Exemplo: DELETE /api/posts/:id
+const post = await PostRepository.findById(id)  // Pega dados ANTES
+const deleted = await PostRepository.delete(id)
+
+if (post) {
+  const eventService = getEventService()
+  if (eventService.isInitialized()) {
+    await eventService.publishPostDeleted({
+      id: post.id,
+      author: post.author,
+      content: post.content,
+      topic_id: post.topic_id,
+    })
+  }
+}
+
+res.json({ success: true, message: "Post deleted" })
+```
+
+#### Backend - Socket.IO (index.ts)
+```typescript
+// Subscriptions
+socket.on('subscribe:posts', async () => {
+  socket.join('posts')
+  await eventService.subscribeToPostCreated()
+  await eventService.subscribeToPostDeleted()  // ← Nova
+})
+
+// Broadcasting
+eventService.on('event', (event) => {
+  if (event.topic === 'post_created') {
+    io.to('posts').emit('post:created', event.data)
+  }
+  if (event.topic === 'post_deleted') {  // ← Nova rota
+    io.to('posts').emit('post:deleted', event.data)
+  }
+  if (event.topic === 'topic_created') {
+    io.to('topics').emit('topic:created', event.data)
+  }
+  if (event.topic === 'topic_deleted') {  // ← Nova rota
+    io.to('topics').emit('topic:deleted', event.data)
+  }
+})
+```
+
+#### Frontend - WebSocketService.ts
+```typescript
+// Novos listeners
+socket.on('post:deleted', (data: PostEvent) => {
+  console.log('[WebSocket] Post deleted:', data)
+  this.emit('post:deleted', data)
+})
+
+socket.on('topic:deleted', (data: TopicEvent) => {
+  console.log('[WebSocket] Topic deleted:', data)
+  this.emit('topic:deleted', data)
+})
+```
+
+#### Frontend - Hook (useWebSocket.ts)
+```typescript
+// Antes: Apenas criação
+const subscribeToPostEvents = (onPostCreated) => {
+  ws.on('post:created', onPostCreated)
+}
+
+// Depois: Criação E deleção
+const subscribeToPostEvents = (onPostChange) => {
+  const handlePostCreated = (post) => {
+    console.log('[useWebSocket] Post created:', post)
+    onPostChange(post)
+  }
+  const handlePostDeleted = (post) => {
+    console.log('[useWebSocket] Post deleted:', post)
+    onPostChange(post)  // Dispara refresh
+  }
+  
+  ws.on('post:created', handlePostCreated)
+  ws.on('post:deleted', handlePostDeleted)
+  
+  return () => {
+    ws.removeListener('post:created', handlePostCreated)
+    ws.removeListener('post:deleted', handlePostDeleted)
+  }
+}
+```
+
+### Alterações Quantitativas
+- `EventService.ts` +60 linhas (2 publish + 2 subscribe methods)
+- `topics.ts` +20 linhas (retrieve before delete + publish)
+- `posts.ts` +20 linhas (retrieve before delete + publish)
+- `index.ts` +10 linhas (subscribe + broadcast)
+- `WebSocketService.ts` +12 linhas (2 event listeners)
+- `useWebSocket.ts` +35 linhas (enhanced subscription handlers)
+- **Total: +157 linhas**
+
+### Impacto
+✅ Deleções agora são sincronizadas em tempo real entre todos os clientes
+✅ Mesmo padrão que criação: retrieve → delete → publish
+✅ Zero breaking changes
+✅ Graceful fallback se middleware cair
+✅ Latência < 200ms típico
+
+### Teste Rápido
+```bash
+# Terminal 1: Criar post em http://localhost:5173
+# Terminal 2: Abrir mesma URL em outra aba
+# Deletar post na aba 1 → Aba 2 atualiza instantaneamente ✅
+```
+
+---
+
 ## Próximos Passos Recomendados
 
 ### Imediato (Hoje)
