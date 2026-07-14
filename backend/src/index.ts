@@ -4,6 +4,7 @@ import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import app from "./app";
 import { getEventService } from "./services/EventService";
+import { corsOrigins } from "./config/cors";
 
 const port = process.env.PORT ? Number(process.env.PORT) : 3000;
 
@@ -13,7 +14,7 @@ const server = http.createServer(app);
 // Initialize Socket.IO with CORS
 const io = new SocketIOServer(server, {
   cors: {
-    origin: ['http://localhost:3001', 'http://127.0.0.1:3001'],
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST'],
   },

@@ -25,7 +25,7 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
           id: topic.id,
           name: topic.name,
           description: topic.description,
-          created_at: topic.created_at,
+          created_at: topic.createdAt,
         });
       }
     } catch (err) {

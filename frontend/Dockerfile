@@ -18,8 +18,12 @@ RUN npm run build
 # Stage 2: Serve
 FROM nginx:alpine
 
-# Copy nginx config
+# Base config + server block template (envsubst'd by the nginx entrypoint on
+# start, so BACKEND_HOST/BACKEND_PORT can point at any hostname at runtime)
 COPY nginx.conf /etc/nginx/nginx.conf
+COPY default.conf.template /etc/nginx/templates/default.conf.template
+ENV BACKEND_HOST=backend
+ENV BACKEND_PORT=3000
 
 # Copy built app from builder
 COPY --from=builder /app/dist /usr/share/nginx/html

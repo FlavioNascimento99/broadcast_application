@@ -1,5 +1,9 @@
 import { io, Socket } from 'socket.io-client'
 
+// Socket.IO shares its origin with the REST API - strip the /api suffix used by axios
+const DEFAULT_SOCKET_URL = ((import.meta.env.VITE_API_URL as string) || 'http://localhost:3000/api')
+  .replace(/\/api\/?$/, '')
+
 // Simple EventEmitter para browser (Node.js EventEmitter não funciona em browser)
 class SimpleEventEmitter {
   private events: Map<string, Set<(...args: any[]) => void>> = new Map()
@@ -54,7 +58,7 @@ export class WebSocketService extends SimpleEventEmitter {
   private connecting = false
   private connectTimeoutId: ReturnType<typeof setTimeout> | null = null
 
-  constructor(private url: string = 'http://localhost:3000') {
+  constructor(private url: string = DEFAULT_SOCKET_URL) {
     super()
   }
 

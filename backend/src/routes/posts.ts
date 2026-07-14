@@ -31,8 +31,8 @@ router.post("/", async (req: Request, res: Response, next: NextFunction) => {
           id: post.id,
           author: post.author,
           content: post.content,
-          topic_id: post.topic_id,
-          created_at: post.created_at,
+          topic_id: post.topicId,
+          created_at: post.createdAt,
         });
       }
     } catch (err) {
@@ -113,7 +113,7 @@ router.delete(
               id: post.id,
               author: post.author,
               content: post.content,
-              topic_id: post.topic_id,
+              topic_id: post.topicId,
             });
           }
         } catch (err) {

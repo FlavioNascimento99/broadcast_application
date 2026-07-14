@@ -6,12 +6,12 @@ import healthRoutes from "./routes/health";
 import dbRoutes from "./routes/db";
 import topicsRoutes from "./routes/topics";
 import postsRoutes from "./routes/posts";
+import { corsOrigins } from "./config/cors";
 
 const app: Express = express();
 
-// Enable CORS for frontend on port 3001
 app.use(cors({
-  origin: ['http://localhost:3001', 'http://127.0.0.1:3001'],
+  origin: corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
